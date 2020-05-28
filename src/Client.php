@@ -4,11 +4,13 @@
  * @license https://github.com/Lexty/robokassa/blob/master/LICENSE MIT
  * @link https://github.com/Lexty/Robokassa
  */
+
 namespace Lexty\Robokassa;
 
 use Lexty\Robokassa\Exception\CalculateSumErrorException;
 use Lexty\Robokassa\Exception\EmptyPaymentMethodException;
 use Lexty\Robokassa\Exception\InvalidCultureException;
+use Lexty\Robokassa\Exception\InvalidHostException;
 use Lexty\Robokassa\Exception\InvoiceNotFoundException;
 use Lexty\Robokassa\Exception\ResponseErrorException;
 use Lexty\Robokassa\Exception\UnsupportedRequestMethodException;
@@ -20,9 +22,18 @@ class Client
 {
     const CULTURE_EN = 'en';
     const CULTURE_RU = 'ru';
+    const CULTURE_KZ = 'kz';
 
-    const REQUEST_METHOD_GET  = 'get';
+    const REQUEST_METHOD_GET = 'get';
     const REQUEST_METHOD_POST = 'post';
+
+    const HOST_RU = 'https://auth.robokassa.ru';
+    const HOST_EN = 'https://auth.robokassa.ru';
+    const HOST_KZ = 'https://auth.robokassa.kz';
+
+    private $formBaseUrl = '/Merchant/PaymentForm/Form';
+    private $paymentBaseUrl = '/Merchant/Index.aspx';
+    private $serviceBaseUrl = '/Merchant/WebService/Service.asmx/';
 
     /**
      * @var Auth
@@ -39,10 +50,10 @@ class Client
      */
     private $requestMethod = self::REQUEST_METHOD_GET;
 
-    private $formBaseUrl    = 'https://auth.robokassa.ru/Merchant/PaymentForm/Form';
-    private $paymentBaseUrl = 'https://auth.robokassa.ru/Merchant/Index.aspx';
-    private $serviceBaseUrl = 'https://auth.robokassa.ru/Merchant/WebService/Service.asmx/';
-//    private $recurringBaseUrl = 'https://auth.robokassa.ru/Merchant/Recurring';
+    /**
+     * @var string
+     */
+    private $hostUrl = self::HOST_RU;
 
     /**
      * Client constructor.
@@ -70,10 +81,26 @@ class Client
     public function setCulture($culture)
     {
         $lcCulture = strtolower($culture);
-        if (self::CULTURE_EN !== $lcCulture && self::CULTURE_RU !== $lcCulture) {
+        if (self::CULTURE_EN !== $lcCulture && self::CULTURE_RU !== $lcCulture && self::CULTURE_KZ !== $lcCulture) {
             throw new InvalidCultureException(sprintf('Unsupported culture "%s".', $culture));
         }
         $this->culture = $lcCulture;
+
+        return $this;
+    }
+
+    /**
+     * @param string $host
+     *
+     * @return Client
+     */
+    public function setHost($host)
+    {
+        $lcHost = strtolower($host);
+        if (self::HOST_EN !== $lcHost && self::HOST_RU !== $lcHost && self::HOST_KZ !== $lcHost) {
+            throw new InvalidHostException(sprintf('Unsupported host "%s".', $host));
+        }
+        $this->hostUrl = $lcHost;
 
         return $this;
     }
@@ -124,6 +151,14 @@ class Client
     }
 
     /**
+     * @return string
+     */
+    public function getHostUrl()
+    {
+        return $this->hostUrl;
+    }
+
+    /**
      * Set any property which has setter method from array.
      *
      * @param array $data
@@ -149,7 +184,7 @@ class Client
     public function getCurrencies()
     {
         $response = $this->sendRequest(
-            $this->serviceBaseUrl . 'GetCurrencies',
+            $this->hostUrl . $this->serviceBaseUrl . 'GetCurrencies',
             ['MerchantLogin' => $this->auth->getMerchantLogin(), 'Language' => $this->culture],
             $this->requestMethod
         );
@@ -168,9 +203,9 @@ class Client
                 $items[] = $item['@attributes'];
             }
             $groups[] = [
-                'Code'        => (string)$group->attributes()->Code,
+                'Code' => (string)$group->attributes()->Code,
                 'Description' => (string)$group->attributes()->Description,
-                'Items'       => $items,
+                'Items' => $items,
             ];
         }
         return $groups;
@@ -184,7 +219,7 @@ class Client
     public function getPaymentMethodGroups()
     {
         $response = $this->sendRequest(
-            $this->serviceBaseUrl . 'GetPaymentMethods',
+            $this->hostUrl . $this->serviceBaseUrl . 'GetPaymentMethods',
             ['MerchantLogin' => $this->auth->getMerchantLogin(), 'Language' => $this->culture],
             $this->requestMethod
         );
@@ -205,8 +240,8 @@ class Client
     /**
      * Returns the sums with commission and some addition data.
      *
-     * @param float       $shopSum
-     * @param string      $paymentMethod
+     * @param float $shopSum
+     * @param string $paymentMethod
      * @param string|null $culture
      *
      * @return array
@@ -218,12 +253,12 @@ class Client
         }
 
         $response = $this->sendRequest(
-            $this->serviceBaseUrl . 'GetRates',
+            $this->hostUrl . $this->serviceBaseUrl . 'GetRates',
             [
                 'MerchantLogin' => $this->auth->getMerchantLogin(),
-                'IncCurrLabel'  => $paymentMethod,
-                'OutSum'        => $shopSum,
-                'Language'      => $culture
+                'IncCurrLabel' => $paymentMethod,
+                'OutSum' => $shopSum,
+                'Language' => $culture
             ],
             $this->requestMethod
         );
@@ -243,9 +278,9 @@ class Client
                 $items[] = $item['@attributes'] + ['ClientSum' => $clientSum];
             }
             $groups[] = [
-                'Code'        => (string)$group->attributes()->Code,
+                'Code' => (string)$group->attributes()->Code,
                 'Description' => (string)$group->attributes()->Description,
-                'Items'       => $items,
+                'Items' => $items,
             ];
         }
 
@@ -258,7 +293,7 @@ class Client
      * Helps calculate the amount receivable on the basis of ROBOKASSA
      * prevailing exchange rates from the amount payable by the user.
      *
-     * @param float  $clientSum
+     * @param float $clientSum
      * @param string $paymentMethod
      *
      * @return float
@@ -272,11 +307,11 @@ class Client
         }
 
         $response = $this->sendRequest(
-            $this->serviceBaseUrl . 'CalcOutSumm',
+            $this->hostUrl . $this->serviceBaseUrl . 'CalcOutSumm',
             [
                 'MerchantLogin' => $this->auth->getMerchantLogin(),
-                'IncCurrLabel'  => $paymentMethod,
-                'IncSum'        => $clientSum
+                'IncCurrLabel' => $paymentMethod,
+                'IncSum' => $clientSum
             ],
             $this->requestMethod
         );
@@ -289,12 +324,11 @@ class Client
 
     /**
      * Returns the sum without commission for `$paymentMethod`.
-
      * Helps calculate the amount payable by the buyer including ROBOKASSA’s
      * charge (according to the service plan) and charges of other systems
      * through which the buyer decided to pay for the order.
      *
-     * @param float  $shopSum
+     * @param float $shopSum
      * @param string $paymentMethod
      *
      * @return float
@@ -342,11 +376,11 @@ class Client
         ]);
 
         $response = $this->sendRequest(
-            $this->serviceBaseUrl . 'OpState',
+            $this->hostUrl . $this->serviceBaseUrl . 'OpState',
             [
                 'MerchantLogin' => $this->auth->getMerchantLogin(),
-                'InvoiceID'     => $invoiceId,
-                'Signature'     => $signature
+                'InvoiceID' => $invoiceId,
+                'Signature' => $signature
             ],
             $this->requestMethod
         );
@@ -354,17 +388,17 @@ class Client
         $sxe = simplexml_load_string($response);
         $this->parseError($sxe);
         return [
-            'InvoiceId'                => (int)$invoiceId,
-            'StateCode'                => (int)$sxe->State->Code,
-            'RequestDate'              => new \DateTime((string)$sxe->State->RequestDate),
-            'StateDate'                => new \DateTime((string)$sxe->State->StateDate),
-            'PaymentMethod'            => (string)$sxe->Info->IncCurrLabel,
-            'ClientSum'                => (float)$sxe->Info->IncSum,
-            'ClientAccount'            => (string)$sxe->Info->IncAccount,
-            'PaymentMethodCode'        => (string)$sxe->Info->PaymentMethod->Code,
+            'InvoiceId' => (int)$invoiceId,
+            'StateCode' => (int)$sxe->State->Code,
+            'RequestDate' => new \DateTime((string)$sxe->State->RequestDate),
+            'StateDate' => new \DateTime((string)$sxe->State->StateDate),
+            'PaymentMethod' => (string)$sxe->Info->IncCurrLabel,
+            'ClientSum' => (float)$sxe->Info->IncSum,
+            'ClientAccount' => (string)$sxe->Info->IncAccount,
+            'PaymentMethodCode' => (string)$sxe->Info->PaymentMethod->Code,
             'PaymentMethodDescription' => (string)$sxe->Info->PaymentMethod->Description,
-            'Currency'                 => (string)$sxe->Info->OutCurrLabel,
-            'ShopSum'                  => (float)$sxe->Info->OutSum,
+            'Currency' => (string)$sxe->Info->OutCurrLabel,
+            'ShopSum' => (float)$sxe->Info->OutSum,
         ];
     }
 
@@ -390,8 +424,8 @@ class Client
      *
      * Protected for phpUnit mocking.
      *
-     * @param string $url    URL
-     * @param array  $params `GET` or `POST` parameters.
+     * @param string $url URL
+     * @param array $params `GET` or `POST` parameters.
      * @param string $method `GET` or `POST` method.
      *
      * @return string

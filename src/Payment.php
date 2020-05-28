@@ -34,6 +34,7 @@ class Payment
 {
     const CULTURE_EN = 'en';
     const CULTURE_RU = 'ru';
+    const CULTURE_KZ = 'kz';
 
     const FORM_TYPE_M   = 'M';
     const FORM_TYPE_MS  = 'MS';
@@ -66,6 +67,15 @@ class Payment
             self::STATE_COMPLETED  => 'Operation completed successfully.',
         ],
         self::CULTURE_RU => [
+            self::STATE_NEW        => '',
+            self::STATE_INITIATED  => 'Операция только инициализирована, деньги от покупателя не получены.',
+            self::STATE_CANCELED   => 'Операция отменена, деньги от покупателя не были получены.',
+            self::STATE_PROCESSING => 'Деньги от покупателя получены, производится зачисление денег на счет магазина.',
+            self::STATE_RETURNED   => 'Деньги после получения были возвращены покупателю.',
+            self::STATE_SUSPENDED  => 'Исполнение операции приостановлено.',
+            self::STATE_COMPLETED  => 'Операция выполнена, завершена успешно.',
+        ],
+        self::CULTURE_KZ => [
             self::STATE_NEW        => '',
             self::STATE_INITIATED  => 'Операция только инициализирована, деньги от покупателя не получены.',
             self::STATE_CANCELED   => 'Операция отменена, деньги от покупателя не были получены.',
@@ -213,7 +223,7 @@ class Payment
     public function getFormUrl($type = null)
     {
         $type = strtoupper($type);
-        return $this->client->getFormBaseUrl() . $type . '.js?' . $this->getPaymentUrlQueryString(
+        return $this->client->getHostUrl().$this->client->getFormBaseUrl() . $type . '.js?' . $this->getPaymentUrlQueryString(
             self::FORM_TYPE_FL === $type || self::FORM_TYPE_FLS === $type
         );
     }
@@ -223,7 +233,7 @@ class Payment
      */
     public function getPaymentUrl()
     {
-        return $this->client->getPaymentBaseUrl() . '?' . $this->getPaymentUrlQueryString();
+        return $this->client->getHostUrl().$this->client->getPaymentBaseUrl() . '?' . $this->getPaymentUrlQueryString();
     }
 
     /**
@@ -497,7 +507,7 @@ class Payment
     public function setCulture($culture)
     {
         $lcCulture = strtolower($culture);
-        if (self::CULTURE_EN !== $lcCulture && self::CULTURE_RU !== $lcCulture) {
+        if (!in_array($lcCulture, array(self::CULTURE_EN, self::CULTURE_RU, self::CULTURE_KZ))) {
             throw new InvalidCultureException(sprintf('Unsupported culture "%s".', $culture));
         }
         $this->culture = $lcCulture;
