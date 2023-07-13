@@ -14,6 +14,7 @@ use Lexty\Robokassa\Exception\UnsupportedHashAlgorithmException;
 class Auth
 {
     const HASH_ALGO_MD5 = 'md5';
+    const HASH_ALGO_SHA256 = 'sha256';
 
     /**
      * @var string
@@ -34,7 +35,7 @@ class Auth
     /**
      * @var string
      */
-    private $hashAlgo = self::HASH_ALGO_MD5;
+    private $hashAlgo = self::HASH_ALGO_SHA256;
 
     /**
      * Auth constructor.
